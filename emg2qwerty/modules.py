@@ -278,3 +278,65 @@ class TDSConvEncoder(nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.tds_conv_blocks(inputs)  # (T, N, num_features)
+
+
+class RecurrentEncoder(nn.Module):
+    """A recurrent encoder over temporal sequences.
+
+    Supports RNN, GRU and LSTM backends for inputs of shape (T, N, num_features)
+    and returns outputs of shape (T, N, hidden_size * directions).
+
+    Args:
+        input_size (int): Number of input features at each timestep.
+        recurrent_type (str): One of {"rnn", "gru", "lstm"}.
+        hidden_size (int): Hidden state size per recurrent direction.
+        num_layers (int): Number of stacked recurrent layers.
+        dropout (float): Inter-layer dropout (applied when num_layers > 1).
+        bidirectional (bool): Whether to use a bidirectional recurrent encoder.
+    """
+
+    def __init__(
+        self,
+        input_size: int,
+        recurrent_type: str = "lstm",
+        hidden_size: int = 384,
+        num_layers: int = 3,
+        dropout: float = 0.2,
+        bidirectional: bool = True,
+    ) -> None:
+        super().__init__()
+        recurrent_type = recurrent_type.lower()
+        rnn_cls_map = {
+            "rnn": nn.RNN,
+            "gru": nn.GRU,
+            "lstm": nn.LSTM,
+        }
+        assert recurrent_type in rnn_cls_map, f"Unsupported recurrent_type: {recurrent_type}"
+        rnn_cls = rnn_cls_map[recurrent_type]
+
+        self.rnn = rnn_cls(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            dropout=dropout if num_layers > 1 else 0.0,
+            bidirectional=bidirectional,
+        )
+
+    def forward(
+        self, inputs: torch.Tensor, input_lengths: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        if input_lengths is None:
+            outputs, _ = self.rnn(inputs)
+            return outputs
+
+        packed_inputs = nn.utils.rnn.pack_padded_sequence(
+            inputs,
+            lengths=input_lengths.detach().cpu(),
+            enforce_sorted=False,
+        )
+        packed_outputs, _ = self.rnn(packed_inputs)
+        outputs, _ = nn.utils.rnn.pad_packed_sequence(
+            packed_outputs,
+            total_length=inputs.shape[0],
+        )
+        return outputs

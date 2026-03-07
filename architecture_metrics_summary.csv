@@ -1,0 +1,4 @@
+model,run_dir,event_file,val_CER,test_CER,val_loss,test_loss
+recurrent_lstm_ctc,/content/drive/MyDrive/emg2qwerty/logs/architecture_experiment/runs/recurrent_lstm_ctc_gpu,/content/drive/MyDrive/emg2qwerty/logs/architecture_experiment/runs/recurrent_lstm_ctc_gpu/lightning_logs/version_0/events.out.tfevents.1772765266.2de1eb581834,,21.6987247467041,,0.6943457722663879
+tds_conv_ctc,/content/drive/MyDrive/emg2qwerty/logs/architecture_experiment/runs/tds_conv_ctc_gpu,/content/drive/MyDrive/emg2qwerty/logs/architecture_experiment/runs/tds_conv_ctc_gpu/lightning_logs/version_0/events.out.tfevents.1772762539.2de1eb581834,,25.480873107910156,,0.8121733665466309
+recurrent_rnn_ctc,/content/drive/MyDrive/emg2qwerty/logs/architecture_experiment/runs/recurrent_rnn_ctc_gpu,/content/drive/MyDrive/emg2qwerty/logs/architecture_experiment/runs/recurrent_rnn_ctc_gpu/lightning_logs/version_0/events.out.tfevents.1772767365.2de1eb581834,,80.26799011230469,,1.6480937004089355
