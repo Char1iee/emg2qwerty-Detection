@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import math
 from collections.abc import Sequence
 
 import torch
@@ -338,5 +339,152 @@ class RecurrentEncoder(nn.Module):
         outputs, _ = nn.utils.rnn.pad_packed_sequence(
             packed_outputs,
             total_length=inputs.shape[0],
+        )
+        return outputs
+
+
+class TransformerEncoder(nn.Module):
+    """Transformer encoder for sequence-to-sequence modeling.
+
+    Args:
+        input_size (int): Number of input features at each timestep.
+        d_model (int): Model dimension.
+        nhead (int): Number of attention heads.
+        num_layers (int): Number of transformer encoder layers.
+        dim_feedforward (int): Feedforward dimension.
+        dropout (float): Dropout probability.
+    """
+
+    def __init__(
+        self,
+        input_size: int,
+        d_model: int = 256,
+        nhead: int = 8,
+        num_layers: int = 4,
+        dim_feedforward: int = 1024,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.d_model = d_model
+        self.input_proj = nn.Linear(input_size, d_model)
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=dim_feedforward,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=False,
+            norm_first=False,
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self._register_pos_encoding_buffer()
+
+    def _register_pos_encoding_buffer(self, max_len: int = 65_536) -> None:
+        pe = torch.zeros(max_len, self.d_model)
+        position = torch.arange(0, max_len, dtype=torch.float32).unsqueeze(1)
+        div_term = torch.exp(
+            torch.arange(0, self.d_model, 2).float() * (-math.log(10000.0) / self.d_model)
+        )
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer("pe", pe.unsqueeze(1))  # (max_len, 1, d_model)
+
+    def _get_pos_encoding(self, T: int, device: torch.device) -> torch.Tensor:
+        """Return PE of shape (T, 1, d_model). Uses buffer if T <= max_len, else computes on the fly."""
+        if T <= self.pe.shape[0]:
+            return self.pe[:T]
+        position = torch.arange(T, dtype=torch.float32, device=device).unsqueeze(1)
+        div_term = torch.exp(
+            torch.arange(0, self.d_model, 2, device=device).float()
+            * (-math.log(10000.0) / self.d_model)
+        )
+        pe = torch.zeros(T, self.d_model, device=device)
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        return pe.unsqueeze(1)
+
+    def forward(
+        self, inputs: torch.Tensor, input_lengths: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        T, N, C = inputs.shape
+        x = self.input_proj(inputs) * math.sqrt(self.d_model)
+        x = x + self._get_pos_encoding(T, x.device)
+        if input_lengths is not None:
+            mask = torch.arange(T, device=inputs.device)[:, None] >= input_lengths[None]
+            mask = mask  # (T, N) - True where to mask out
+            # TransformerEncoder expects (T, T) mask for self-attn (src_key_padding_mask)
+            # and (N, T) key_padding_mask. nn.TransformerEncoder uses src_key_padding_mask
+            # of shape (N, T) for padding.
+            key_padding_mask = mask.T  # (N, T)
+        else:
+            key_padding_mask = None
+        x = self.transformer(x, src_key_padding_mask=key_padding_mask)
+        return x
+
+
+class CNNRNNEncoder(nn.Module):
+    """CNN front-end followed by RNN (LSTM) for sequence modeling.
+
+    Args:
+        input_size (int): Number of input features.
+        conv_channels (list): Output channels per conv layer.
+        kernel_size (int): 1D conv kernel size.
+        recurrent_type (str): One of {"rnn", "gru", "lstm"}.
+        hidden_size (int): RNN hidden size.
+        num_layers (int): Number of RNN layers.
+        dropout (float): Dropout.
+        bidirectional (bool): Bidirectional RNN.
+    """
+
+    def __init__(
+        self,
+        input_size: int,
+        conv_channels: Sequence[int] = (64, 128, 256),
+        kernel_size: int = 5,
+        recurrent_type: str = "lstm",
+        hidden_size: int = 256,
+        num_layers: int = 2,
+        dropout: float = 0.2,
+        bidirectional: bool = True,
+    ) -> None:
+        super().__init__()
+        rnn_cls_map = {"rnn": nn.RNN, "gru": nn.GRU, "lstm": nn.LSTM}
+        rnn_cls = rnn_cls_map[recurrent_type.lower()]
+        layers: list[nn.Module] = []
+        in_c = input_size
+        for out_c in conv_channels:
+            layers.append(
+                nn.Conv1d(in_c, out_c, kernel_size, padding=kernel_size // 2)
+            )
+            layers.append(nn.BatchNorm1d(out_c))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropout))
+            in_c = out_c
+        self.conv = nn.Sequential(*layers)
+        self.rnn = rnn_cls(
+            input_size=in_c,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            dropout=dropout if num_layers > 1 else 0.0,
+            bidirectional=bidirectional,
+        )
+        self.conv_out_channels = conv_channels[-1]
+
+    def forward(
+        self, inputs: torch.Tensor, input_lengths: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        # inputs: (T, N, C) -> Conv1d expects (N, C, T)
+        x = inputs.permute(1, 2, 0)
+        x = self.conv(x)
+        x = x.permute(2, 0, 1)  # (T, N, C)
+        if input_lengths is None:
+            outputs, _ = self.rnn(x)
+            return outputs
+        packed = nn.utils.rnn.pack_padded_sequence(
+            x, lengths=input_lengths.detach().cpu(), enforce_sorted=False
+        )
+        packed_out, _ = self.rnn(packed)
+        outputs, _ = nn.utils.rnn.pad_packed_sequence(
+            packed_out, total_length=x.shape[0]
         )
         return outputs
