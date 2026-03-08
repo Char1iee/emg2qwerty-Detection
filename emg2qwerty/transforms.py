@@ -243,3 +243,29 @@ class SpecAugment:
 
         # (..., C, freq, T) -> (T, ..., C, freq)
         return x.movedim(-1, 0)
+
+
+@dataclass
+class SelectChannels:
+    n_left: int
+    n_right: int
+    stack_dim: int = 1
+    channel_dim: int = -1
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        assert tensor.shape[self.stack_dim] == 2, \
+            f"Expected 2 bands at dim {self.stack_dim}, got shape {tensor.shape}"
+
+        left, right = tensor.unbind(self.stack_dim)
+
+        left = left[..., :self.n_left]
+        right = right[..., :self.n_right]
+
+        return torch.stack([left, right], dim=self.stack_dim)
+
+@dataclass
+class DownsampleTime:
+    stride: int = 1
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        return tensor[::self.stride]
