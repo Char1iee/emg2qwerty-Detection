@@ -1,6 +1,8 @@
 defaults:
   - user: single_user
-  - transforms: log_spectrogram
+  # - transforms: log_spectrogram
+  # - transforms: channels_drop
+  - transforms: sampling_rate
   - model: tds_conv_ctc
   - optimizer: adam
   - lr_scheduler: linear_warmup_cosine_annealing
@@ -20,7 +22,7 @@ trainer:
   accelerator: gpu
   devices: 1
   num_nodes: 1
-  max_epochs: 150
+  max_epochs: 40
   default_root_dir: ${hydra:runtime.output_dir}
 
 callbacks:
