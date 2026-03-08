@@ -1,0 +1,11 @@
+model,val_CER,val_loss,test_CER,test_loss
+tds_conv_ctc,23.54896,0.77876,25.48087,0.81217
+recurrent_lstm_ctc,21.17856,0.70120,21.69872,0.69435
+recurrent_gru_ctc,19.29552,0.61574,24.57316,0.75619
+recurrent_rnn_ctc,78.86575,1.82597,80.26799,1.64809
+recurrent_lstm_ctc_deep,41.05007,1.21270,39.22628,1.28789
+recurrent_lstm_ctc_wide,20.75764,0.66620,22.15258,0.69899
+recurrent_lstm_ctc_shallow,31.39123,1.02381,30.04106,0.96896
+recurrent_lstm_ctc_unidirectional,100.0,3.45920,100.0,3.25830
+transformer_ctc,93.15463,2.16365,94.72661,2.91942
+cnn_rnn_ctc,20.86841,0.68142,22.28226,0.67930
