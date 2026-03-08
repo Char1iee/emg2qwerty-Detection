@@ -1,0 +1,16 @@
+# @package _global_
+# LSTM with 512 hidden (wider than default 384)
+module:
+  _target_: emg2qwerty.lightning.RecurrentCTCModule
+  in_features: 528
+  mlp_features: [384]
+  recurrent_type: lstm
+  hidden_size: 512
+  num_layers: 3
+  dropout: 0.2
+  bidirectional: true
+
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000
+  padding: [1800, 200]

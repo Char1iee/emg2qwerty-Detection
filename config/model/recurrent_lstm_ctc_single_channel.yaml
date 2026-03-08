@@ -1,0 +1,17 @@
+# @package _global_
+# Same as recurrent_lstm_ctc but for single-band (left or right) in_features=264
+module:
+  _target_: emg2qwerty.lightning.RecurrentCTCModule
+  in_features: 264  # (n_fft//2+1)*16 for 1 band
+  mlp_features: [384]
+  recurrent_type: lstm
+  hidden_size: 384
+  num_layers: 3
+  dropout: 0.2
+  bidirectional: true
+  num_bands: 1
+
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000
+  padding: [1800, 200]

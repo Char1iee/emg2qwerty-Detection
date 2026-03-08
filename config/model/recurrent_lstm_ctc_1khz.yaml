@@ -1,0 +1,17 @@
+# @package _global_
+# Same as recurrent_lstm_ctc but for 1kHz EMG (use with transforms=1khz)
+# window_length and padding scaled for 1kHz (half of 2kHz)
+module:
+  _target_: emg2qwerty.lightning.RecurrentCTCModule
+  in_features: 528
+  mlp_features: [384]
+  recurrent_type: lstm
+  hidden_size: 384
+  num_layers: 3
+  dropout: 0.2
+  bidirectional: true
+
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 4000   # 4 sec at 1kHz
+  padding: [900, 100]   # 900ms past, 100ms future at 1kHz

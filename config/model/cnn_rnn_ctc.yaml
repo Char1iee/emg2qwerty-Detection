@@ -1,0 +1,18 @@
+# @package _global_
+# CNN front-end + LSTM (experimental)
+module:
+  _target_: emg2qwerty.lightning.CNNRNNCTCModule
+  in_features: 528
+  mlp_features: [384]
+  conv_channels: [64, 128, 256]
+  kernel_size: 5
+  recurrent_type: lstm
+  hidden_size: 256
+  num_layers: 2
+  dropout: 0.2
+  bidirectional: true
+
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000
+  padding: [1800, 200]
